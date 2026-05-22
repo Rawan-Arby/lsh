@@ -1,21 +1,16 @@
-/***************************************************************************//**
-
-  @file         main.c
-
-  @author       Stephen Brennan
-
-  @date         Thursday,  8 January 2015
-
-  @brief        LSH (Libstephen SHell)
-
-*******************************************************************************/
-
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+int command_count = 1;
+#define HISTORY_SIZE 100
+char *history[HISTORY_SIZE]; // array to store commands
+int history_count = 0; // number or current commands
+
+extern char **environ; //global var
 
 /*
   Function Declarations for builtin shell commands:
@@ -24,21 +19,37 @@ int lsh_cd(char **args);
 int lsh_help(char **args);
 int lsh_exit(char **args);
 
+int lsh_pwd(char **args);
+int lsh_echo(char **args);
+int lsh_history(char **args);
+int lsh_env(char **args);
+int lsh_clear(char **args); // clear screen
 /*
   List of builtin commands, followed by their corresponding functions.
  */
 char *builtin_str[] = {
   "cd",
   "help",
-  "exit"
+  "exit",
+  "pwd",
+  "echo",
+  "history",
+  "env",
+  "clear"
 };
 
 int (*builtin_func[]) (char **) = {
   &lsh_cd,
   &lsh_help,
-  &lsh_exit
+  &lsh_exit,
+  &lsh_pwd,
+  &lsh_echo,
+  &lsh_history,
+  &lsh_env,
+  &lsh_clear
 };
 
+// returns number of builtins
 int lsh_num_builtins() {
   return sizeof(builtin_str) / sizeof(char *);
 }
@@ -52,6 +63,9 @@ int lsh_num_builtins() {
    @param args List of args.  args[0] is "cd".  args[1] is the directory.
    @return Always returns 1, to continue executing.
  */
+
+//cd Desktop
+//args[0] args[1]
 int lsh_cd(char **args)
 {
   if (args[1] == NULL) {
@@ -92,6 +106,57 @@ int lsh_help(char **args)
 int lsh_exit(char **args)
 {
   return 0;
+}
+
+//current work directory
+int lsh_pwd(char **args){
+  char cwd[1024];
+  if(getcwd(cwd,sizeof(cwd))!=NULL){
+    printf("%s\n",cwd);
+  }else{
+    perror("lsh");
+  }
+  return 1;
+}
+
+//print all arguments 
+int lsh_echo(char **args){
+  int i=1; // start of sentence
+  while (args[i] != NULL)
+  {
+    printf("%s ",args[i]);
+    i++;
+  }
+  printf("\n");
+  
+  return 1;
+}
+
+//maintain list of previously entered commands
+int lsh_history(char **ags)
+{
+  int i;
+  for(i=0;i<history_count;i++){
+    printf("%d %s\n",i+1,history[i]);
+  }
+  return 1;
+}
+
+//print all current environment variables
+int lsh_env(char **args){
+  int i=0;
+  while(environ[i] != NULL){
+    printf("%s\n",environ[i]);
+    i++;
+  }
+  return 1;
+}
+
+//clear screen
+int lsh_clear(char **args)
+{
+  system("clear");
+  return 1;
 }
 
 /**
@@ -254,10 +319,17 @@ void lsh_loop(void)
   int status;
 
   do {
-    printf("> ");
+    printf("[%d] rawan-shell> ", command_count); //prompt
     line = lsh_read_line();
+    if(line != NULL && line[0] != '\0') {
+    if(history_count < HISTORY_SIZE){
+      history[history_count] = strdup(line); //copy line
+      history_count++;
+    }
+  }
     args = lsh_split_line(line);
     status = lsh_execute(args);
+    command_count++;
 
     free(line);
     free(args);
@@ -278,7 +350,11 @@ int main(int argc, char **argv)
   lsh_loop();
 
   // Perform any shutdown/cleanup.
-
+  // free histroy(memory cleanup)
+  int i;
+  for (i = 0; i < history_count; i++) {
+      free(history[i]); 
+  }
   return EXIT_SUCCESS;
 }
 
